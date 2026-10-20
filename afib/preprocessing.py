@@ -3,22 +3,59 @@ from __future__ import annotations
 from fractions import Fraction
 
 import numpy as np
-from scipy import signal
 from scipy.ndimage import maximum_filter1d, uniform_filter1d
+
+try:
+    from scipy import signal
+    _HAS_SCIPY_SIGNAL = True
+except (ImportError, OSError):
+    _HAS_SCIPY_SIGNAL = False
+
+
+def _simple_find_peaks(x: np.ndarray, height: float | np.ndarray, distance: int):
+    """Pure NumPy peak detector fallback when scipy.signal is restricted."""
+    peaks = []
+    n = len(x)
+    is_arr = isinstance(height, np.ndarray)
+    for i in range(1, n - 1):
+        if x[i] > x[i - 1] and x[i] >= x[i + 1]:
+            h = height[i] if is_arr else height
+            if x[i] >= h:
+                if not peaks or (i - peaks[-1]) >= distance:
+                    peaks.append(i)
+                elif x[i] > x[peaks[-1]]:
+                    peaks[-1] = i
+    return np.array(peaks, dtype=int), {}
 
 
 def bandpass(ecg: np.ndarray, fs: float, low: float, high: float, order: int = 3) -> np.ndarray:
-    """Zero-phase Butterworth band-pass (zero phase so R-peaks are not shifted in time)."""
-    sos = signal.butter(order, [low, high], btype="bandpass", fs=fs, output="sos")
-    return signal.sosfiltfilt(sos, ecg)
+    """Zero-phase band-pass (zero phase so R-peaks are not shifted in time)."""
+    if _HAS_SCIPY_SIGNAL:
+        try:
+            sos = signal.butter(order, [low, high], btype="bandpass", fs=fs, output="sos")
+            return signal.sosfiltfilt(sos, ecg)
+        except Exception:
+            pass
+    # Pure numpy/ndimage fallback: baseline removal + moving average smoothing
+    baseline_win = max(3, int(fs / max(0.1, low)))
+    smooth_win = max(1, int(fs / max(1.0, high)))
+    baseline = uniform_filter1d(ecg, size=baseline_win)
+    hp = ecg - baseline
+    return uniform_filter1d(hp, size=smooth_win)
 
 
 def resample(ecg: np.ndarray, fs_in: float, fs_out: float) -> np.ndarray:
-    """Polyphase resampling to a common rate, so models are not tied to one device/dataset."""
+    """Resample to target rate using polyphase or linear interpolation."""
     if int(fs_in) == int(fs_out):
         return ecg
-    frac = Fraction(int(fs_out), int(fs_in)).limit_denominator(1000)
-    return signal.resample_poly(ecg, frac.numerator, frac.denominator)
+    if _HAS_SCIPY_SIGNAL:
+        try:
+            frac = Fraction(int(fs_out), int(fs_in)).limit_denominator(1000)
+            return signal.resample_poly(ecg, frac.numerator, frac.denominator)
+        except Exception:
+            pass
+    num_out = int(round(len(ecg) * fs_out / fs_in))
+    return np.interp(np.linspace(0, len(ecg) - 1, num_out), np.arange(len(ecg)), ecg)
 
 
 def detect_r_peaks(ecg: np.ndarray, fs: float) -> np.ndarray:
@@ -32,7 +69,14 @@ def detect_r_peaks(ecg: np.ndarray, fs: float) -> np.ndarray:
     mwi = uniform_filter1d(np.gradient(qrs) ** 2, size=max(1, int(0.15 * fs)))
     local_max = maximum_filter1d(mwi, size=int(8 * fs))
     local_max = uniform_filter1d(local_max, size=int(4 * fs))
-    cand, _ = signal.find_peaks(mwi, height=0.3 * local_max, distance=int(0.2 * fs))
+
+    if _HAS_SCIPY_SIGNAL:
+        try:
+            cand, _ = signal.find_peaks(mwi, height=0.3 * local_max, distance=int(0.2 * fs))
+        except Exception:
+            cand, _ = _simple_find_peaks(mwi, height=0.3 * local_max, distance=int(0.2 * fs))
+    else:
+        cand, _ = _simple_find_peaks(mwi, height=0.3 * local_max, distance=int(0.2 * fs))
 
     half = int(0.08 * fs)                      # refine on the ECG itself; abs() handles inverted leads
     refined = []

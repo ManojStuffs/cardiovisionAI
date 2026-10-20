@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CardioVision AI — Clinical ECG & AFib Diagnostic Platform</title>
+  <meta name="description" content="Deep learning cardiac electrophysiology platform for real-time Atrial Fibrillation and cardiac arrhythmia detection.">
+  
+  <!-- Modern Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="dark-theme">
+
+  <!-- Ambient background glow elements -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+
+  <!-- Header & Live ECG Banner -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>CARDIOVISION<span>AI</span></h1>
+          <p class="tagline">Clinical Atrial Fibrillation & Arrhythmia Intelligence</p>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <div class="status-chip" id="engineStatusChip">
+          <span class="status-dot pulsating"></span>
+          <span class="status-label" id="engineStatusText">Neural Core: Active</span>
+        </div>
+        <div class="model-badge" title="Deep Neural Architecture">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+          </svg>
+          <span id="modelBadgeText">Vision Transformer Architecture</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Oscilloscope Line -->
+    <div class="oscilloscope-wrapper">
+      <canvas id="oscilloscopeCanvas" height="40"></canvas>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <main class="main-container">
+
+    <!-- Left Column: Input & Upload -->
+    <section class="panel input-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+          </svg>
+          <h2>ECG Trace Acquisition</h2>
+        </div>
+        <span class="panel-subtitle">Upload single-lead rhythm strip or cropped 12-lead paper scan</span>
+      </div>
+
+      <!-- Quick Demo Presets -->
+      <div class="demo-samples-section">
+        <label class="section-label">Select Reference ECG Case:</label>
+        <div class="demo-pills" id="demoPillsContainer">
+          <button class="pill-btn loading-shimmer" disabled>Loading reference cases...</button>
+        </div>
+      </div>
+
+      <!-- Drag & Drop Zone -->
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept="image/png, image/jpeg, image/jpg, image/tiff" hidden>
+        
+        <div class="drop-zone-idle" id="dropIdleState">
+          <div class="upload-icon-circle">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </div>
+          <h3>Drag & Drop ECG trace here</h3>
+          <p>Supports PNG, JPG, JPEG, TIFF from telemetry monitors or paper captures</p>
+          <button type="button" class="btn btn-secondary browse-btn" id="browseBtn">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            Choose File
+          </button>
+        </div>
+
+        <div class="drop-zone-preview hidden" id="dropPreviewState">
+          <div class="preview-card">
+            <img id="previewImage" alt="ECG Preview">
+            <div class="preview-overlay">
+              <span id="previewFilename">ecg_trace.png</span>
+              <button type="button" class="btn-icon" id="clearPreviewBtn" title="Remove image">&times;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Config & Action -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="secondsInput">Trace Duration (Seconds)</label>
+          <div class="input-with-unit">
+            <input type="number" id="secondsInput" value="10.0" min="4.0" max="30.0" step="0.5">
+            <span class="unit">sec</span>
+          </div>
+          <span class="help-text">Standard diagnostic strip window is 10.0 seconds</span>
+        </div>
+      </div>
+
+      <button type="button" class="btn btn-primary btn-glow" id="analyzeBtn" disabled>
+        <span class="btn-text">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          Run AI Diagnostic Analysis
+        </span>
+        <span class="btn-loader hidden" id="btnLoader">
+          <span class="spinner"></span>
+          Evaluating Cardiac Rhythm...
+        </span>
+      </button>
+
+      <!-- Educational Info Box -->
+      <div class="info-card">
+        <div class="info-icon">⚡</div>
+        <div class="info-content">
+          <h4>Deep Neural Architecture</h4>
+          <p>Our deep Vision Transformer analyzes 2D spatial waveform contours, detecting absence of organized P-waves, baseline fibrillatory ripples, and conduction disturbances across the cardiac cycle.</p>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- Right Column: Results & Intelligence -->
+    <section class="panel results-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3v18h18M9 9l3 3 5-5"/>
+          </svg>
+          <h2>Diagnostic Intelligence</h2>
+        </div>
+        <div class="header-actions">
+          <button type="button" class="btn-outline hidden" id="printReportBtn" title="Print / Export Report">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+              <path d="M6 14h12v8H6z"/>
+            </svg>
+            Export Report
+          </button>
+        </div>
+      </div>
+
+      <!-- Placeholder State when no analysis done yet -->
+      <div class="empty-state" id="emptyState">
+        <div class="empty-illustration">
+          <div class="pulse-ring"></div>
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h3>Awaiting ECG Input</h3>
+        <p>Select a reference case on the left or upload an ECG image to generate a comprehensive cardiac evaluation.</p>
+      </div>
+
+      <!-- Active Results State -->
+      <div class="results-content hidden" id="resultsContent">
+
+        <!-- Top Verdict Banner -->
+        <div class="verdict-banner" id="verdictBanner">
+          <div class="verdict-icon-container" id="verdictIcon">
+            <!-- Dynamic icon inserted by JS -->
+          </div>
+          <div class="verdict-details">
+            <span class="verdict-eyebrow">DIAGNOSTIC VERDICT</span>
+            <h3 class="verdict-title" id="verdictTitle">Analyzing...</h3>
+            <p class="verdict-subtitle" id="verdictSubtitle">--</p>
+          </div>
+          <div class="verdict-badge" id="urgencyBadge">ROUTINE</div>
+        </div>
+
+        <!-- Metrics Row: AFib Risk Meter + Neural Assessment (NO Heart Rate) -->
+        <div class="metrics-grid">
+          <!-- Circular Risk Gauge Card -->
+          <div class="metric-card risk-card">
+            <div class="card-title">AFib Risk Probability</div>
+            <div class="gauge-container">
+              <svg class="radial-gauge" viewBox="0 0 120 120">
+                <circle class="gauge-bg" cx="60" cy="60" r="50"/>
+                <circle class="gauge-fill" id="gaugeProgress" cx="60" cy="60" r="50" stroke-dasharray="314.15" stroke-dashoffset="314.15"/>
+              </svg>
+              <div class="gauge-center-text">
+                <span class="gauge-value" id="gaugeValue">0%</span>
+                <span class="gauge-label">AFIB INDEX</span>
+              </div>
+            </div>
+            <div class="gauge-status" id="gaugeStatusText">Calculating</div>
+          </div>
+
+          <!-- Neural Diagnostic Evaluation Card (Replaces Heart Rate) -->
+          <div class="metric-card telemetry-card">
+            <div class="card-title">Diagnostic Findings</div>
+            <div class="telemetry-items">
+              <div class="telem-item">
+                <div class="telem-icon">🔍</div>
+                <div class="telem-info">
+                  <span class="telem-value" id="primaryFinding">--</span>
+                  <span class="telem-label">Primary Rhythm Pattern</span>
+                </div>
+              </div>
+              <div class="telem-item">
+                <div class="telem-icon">🎯</div>
+                <div class="telem-info">
+                  <span class="telem-value" id="telemConfidence">--%</span>
+                  <span class="telem-label">Diagnostic Confidence</span>
+                </div>
+              </div>
+              <div class="telem-item">
+                <div class="telem-icon">📈</div>
+                <div class="telem-info">
+                  <span class="telem-value" id="rhythmStability">--</span>
+                  <span class="telem-label">Rhythm Regularity</span>
+                </div>
+              </div>
+              <div class="telem-item">
+                <div class="telem-icon">🛡️</div>
+                <div class="telem-info">
+                  <span class="telem-value" id="diagnosticUrgency">--</span>
+                  <span class="telem-label">Triage Priority</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Multiclass Condition Breakdown -->
+        <div class="condition-section">
+          <div class="section-heading">
+            <h4>Cardiac Rhythm Multi-Class Probabilities</h4>
+            <span class="engine-tag" id="engineTag">DeepNet Core</span>
+          </div>
+          <div class="condition-bars" id="conditionBars">
+            <!-- Dynamic condition items inserted by JS -->
+          </div>
+        </div>
+
+        <!-- Digitized Waveform Visualizer -->
+        <div class="waveform-section" id="waveformSection">
+          <div class="section-heading">
+            <h4>Digitized ECG Waveform Trace</h4>
+            <span class="legend"><span class="legend-dot"></span> Segment Peaks</span>
+          </div>
+          <div class="waveform-canvas-container">
+            <canvas id="waveformCanvas"></canvas>
+          </div>
+          <p class="waveform-caption">Lead voltage contour extracted from the image across the recording window.</p>
+        </div>
+
+        <!-- Clinical Guidance Notice -->
+        <div class="clinical-notice">
+          <div class="notice-icon">📋</div>
+          <div class="notice-text">
+            <strong>Clinical Decision Support Notice:</strong> This AI system is engineered for rhythm screening and diagnostic assistance. Suspected arrhythmias or acute ischemic markers must be evaluated by qualified medical professionals in conjunction with complete 12-lead electrocardiography.
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Scripts -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
