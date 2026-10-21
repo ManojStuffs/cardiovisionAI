@@ -14,27 +14,35 @@ This guide details all methods for deploying **CardioVision AI** to the cloud or
 
 ---
 
-## Option 1: Hugging Face Spaces (Recommended — 100% Free Cloud Hosting)
+---
 
-Hugging Face Spaces provides **free 16GB RAM and 2 vCPU**, which is ideal for deep learning and Vision Transformer models.
+## Option 1: Hugging Face Spaces (Recommended Cloud Hosting)
 
-### External Work for You:
-1. **Sign up or log in** to [Hugging Face](https://huggingface.co/).
-2. Click **Create New Space** (or go to `https://huggingface.co/new-space`).
-3. Fill in the details:
-   - **Space Name:** `cardiovision-afib` (or any name you choose)
-   - **License:** `mit` or `apache-2.0`
-   - **Space SDK:** Select **Docker** (Blank)
-   - **Space Hardware:** Select **Free CPU basic (2 vCPU · 16 GB RAM)**
+Hugging Face Spaces is the premier platform for AI models. You can deploy CardioVision AI in two ways:
+
+### Sub-option 1A: Gradio Space (100% Free with ZeroGPU Support)
+*Best for free personal accounts — ZeroGPU is free for up to 2 Spaces!*
+1. Go to [huggingface.co/new-space](https://huggingface.co/new-space).
+2. Set:
+   - **Space Name:** `cardiovision-afib`
+   - **Space SDK:** Select **Gradio**
+   - **Hardware:** Select **ZeroGPU** (`zero-a10g`) or **CPU**
    - **Visibility:** Public
-4. Click **Create Space**.
-5. Push your code to the Hugging Face Space repository:
+3. Push your repository:
    ```bash
    git remote add space https://huggingface.co/spaces/<YOUR_HF_USERNAME>/<SPACE_NAME>
    git push space master:main
    ```
-   *(Alternatively, you can connect your GitHub repository directly in the Space settings).*
-6. **Done!** Hugging Face automatically detects the `Dockerfile`, builds the app, and provides a permanent public HTTPS URL (e.g., `https://<YOUR_USERNAME>-<SPACE_NAME>.hf.space`).
+4. **Done!** Hugging Face runs `app.py` directly with interactive ECG waveform visualization, multi-condition probabilities, and MCP tool capabilities.
+
+### Sub-option 1B: Docker Space (Full React + Flask Web App)
+*Best if you have a Pro account or wish to host the complete full-stack React UI.*
+1. Go to [huggingface.co/new-space](https://huggingface.co/new-space).
+2. Set:
+   - **Space SDK:** Select **Docker** (Blank)
+   - **Visibility:** Public
+3. Push code to the Space repository.
+4. **Done!** Hugging Face runs the multi-stage Dockerfile containing both the compiled React 19 UI and Flask backend.
 
 ---
 
