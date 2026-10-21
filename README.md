@@ -1,4 +1,14 @@
-# AFib Detection — pipeline up to the BiLSTM stage
+---
+title: CardioVision AI - AFib Detection
+emoji: 🫀
+colorFrom: red
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
+# AFib Detection — CardioVision AI Platform
 
 Mirrors the slides: **Icentia11k → signal processing → R-peaks → RR sequences → CNN → BiLSTM**.
 Attention + final output are the next stage (the model is already shaped for it, see below).

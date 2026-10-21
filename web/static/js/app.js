@@ -49,7 +49,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // Initialize
   initOscilloscope();
   checkSystemStatus();
-  fetchSamples();
 
   // --- Oscilloscope Top Banner Animation ---
   function initOscilloscope() {
