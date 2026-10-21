@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
-import type { SampleItem, DiagnosticResult, SystemStatus } from './types';
+import type { DiagnosticResult, SystemStatus } from './types';
 import { Header } from './components/Header';
 import { UploadPanel } from './components/UploadPanel';
 import { ResultsPanel } from './components/ResultsPanel';
 
 export function App() {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
-  const [samples, setSamples] = useState<SampleItem[]>([]);
-  const [selectedSample, setSelectedSample] = useState<SampleItem | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState<string>('');
@@ -15,7 +13,7 @@ export function App() {
   const [loading, setLoading] = useState<boolean>(false);
   const [results, setResults] = useState<DiagnosticResult | null>(null);
 
-  // Fetch initial system status and reference cases
+  // Fetch system status
   useEffect(() => {
     fetch('/api/system-status')
       .then((res) => (res.ok ? res.json() : null))
@@ -23,21 +21,7 @@ export function App() {
         if (data) setSystemStatus(data);
       })
       .catch((err) => console.warn('Status check notice:', err));
-
-    fetch('/api/samples')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: SampleItem[]) => {
-        setSamples(data);
-      })
-      .catch((err) => console.warn('Could not fetch sample cases:', err));
   }, []);
-
-  const handleSelectSample = (sample: SampleItem) => {
-    setSelectedSample(sample);
-    setSelectedFile(null);
-    setPreviewUrl(sample.url);
-    setPreviewName(sample.display_name);
-  };
 
   const handleSelectFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -45,7 +29,6 @@ export function App() {
       return;
     }
     setSelectedFile(file);
-    setSelectedSample(null);
     setPreviewName(file.name);
 
     const reader = new FileReader();
@@ -57,23 +40,17 @@ export function App() {
 
   const handleClearImage = () => {
     setSelectedFile(null);
-    setSelectedSample(null);
     setPreviewUrl(null);
     setPreviewName('');
   };
 
   const handleAnalyze = async () => {
-    if (!selectedFile && !selectedSample) return;
+    if (!selectedFile) return;
 
     setLoading(true);
     const formData = new FormData();
     formData.append('seconds', seconds.toString());
-
-    if (selectedFile) {
-      formData.append('file', selectedFile);
-    } else if (selectedSample) {
-      formData.append('sample_name', selectedSample.filename);
-    }
+    formData.append('file', selectedFile);
 
     try {
       const response = await fetch('/api/predict', {
@@ -102,19 +79,12 @@ export function App() {
 
   return (
     <div className="app-root">
-      {/* Ambient background glows */}
-      <div className="ambient-glow glow-1" />
-      <div className="ambient-glow glow-2" />
-
-      {/* Header with live Oscilloscope */}
+      {/* Institutional Clinical Header */}
       <Header systemStatus={systemStatus} />
 
-      {/* Main Dual-Panel Layout */}
+      {/* Main Dual-Panel Clinical Layout */}
       <main className="main-container">
         <UploadPanel
-          samples={samples}
-          selectedSample={selectedSample}
-          onSelectSample={handleSelectSample}
           selectedFile={selectedFile}
           onSelectFile={handleSelectFile}
           previewUrl={previewUrl}
@@ -126,7 +96,7 @@ export function App() {
           loading={loading}
         />
 
-        <ResultsPanel results={results} onPrint={handlePrint} />
+        <ResultsPanel results={results} onPrint={handlePrint} seconds={seconds} />
       </main>
     </div>
   );

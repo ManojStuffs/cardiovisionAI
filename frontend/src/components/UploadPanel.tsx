@@ -1,10 +1,6 @@
 import React, { useRef } from 'react';
-import type { SampleItem } from '../types';
 
 interface UploadPanelProps {
-  samples: SampleItem[];
-  selectedSample: SampleItem | null;
-  onSelectSample: (sample: SampleItem) => void;
   selectedFile: File | null;
   onSelectFile: (file: File) => void;
   previewUrl: string | null;
@@ -17,9 +13,6 @@ interface UploadPanelProps {
 }
 
 export const UploadPanel: React.FC<UploadPanelProps> = ({
-  samples,
-  selectedSample,
-  onSelectSample,
   selectedFile,
   onSelectFile,
   previewUrl,
@@ -55,7 +48,7 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
     }
   };
 
-  const canAnalyze = !loading && (selectedFile !== null || selectedSample !== null);
+  const canAnalyze = !loading && selectedFile !== null;
 
   return (
     <section className="panel input-panel">
@@ -64,40 +57,12 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
           </svg>
-          <h2>ECG Trace Acquisition</h2>
+          <h2>ECG Trace Input</h2>
         </div>
-        <span className="panel-subtitle">Upload single-lead rhythm strip or cropped 12-lead paper scan</span>
+        <span className="panel-subtitle">Upload rhythm strip image for automated arrhythmia evaluation</span>
       </div>
 
-      {/* Quick Reference Cases */}
-      <div className="demo-samples-section">
-        <label className="section-label">Select Reference ECG Case:</label>
-        <div className="demo-pills">
-          {samples.length === 0 ? (
-            <span className="text-dim-sm">Loading reference cases...</span>
-          ) : (
-            samples.map((sample) => {
-              const isSelected = selectedSample?.filename === sample.filename;
-              return (
-                <button
-                  key={sample.filename}
-                  type="button"
-                  className={`pill-btn ${isSelected ? 'active' : ''}`}
-                  onClick={() => onSelectSample(sample)}
-                  title={`Select ${sample.display_name}`}
-                >
-                  <span className={`pill-tag ${sample.is_afib ? 'tag-afib' : 'tag-norm'}`}>
-                    {sample.is_afib ? 'AFIB' : 'NORM'}
-                  </span>
-                  <span>{sample.display_name}</span>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* Drag & Drop Zone */}
+      {/* Drag & Drop Upload Zone */}
       <div
         className="drop-zone"
         onDragOver={handleDragOver}
@@ -120,14 +85,15 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
         {!previewUrl ? (
           <div className="drop-zone-idle">
             <div className="upload-icon-circle">
-              <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <polyline points="21 15 16 10 5 21" />
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
             </div>
-            <h3>Drag & Drop ECG trace here</h3>
-            <p>Supports PNG, JPG, JPEG, TIFF from telemetry monitors or paper captures</p>
+            <h3>Upload ECG Rhythm Strip</h3>
+            <p>Drag and drop image file here, or click to browse</p>
+            <span className="format-note">Supports PNG, JPG, JPEG, TIFF (rhythm strips or cropped 12-lead rows)</span>
             <button
               type="button"
               className="btn btn-secondary browse-btn"
@@ -139,7 +105,7 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 5v14M5 12h14" />
               </svg>
-              Choose File
+              Select Image File
             </button>
           </div>
         ) : (
@@ -147,18 +113,29 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
             <div className="preview-card">
               <img src={previewUrl} alt="ECG Preview" />
               <div className="preview-overlay">
-                <span>{previewName}</span>
+                <div className="preview-info">
+                  <span className="preview-name">{previewName}</span>
+                  {selectedFile && (
+                    <span className="preview-size">
+                      {(selectedFile.size / 1024).toFixed(1)} KB
+                    </span>
+                  )}
+                </div>
                 <button
                   type="button"
-                  className="btn-icon"
-                  title="Remove image"
+                  className="btn-remove"
+                  title="Remove image and choose another"
                   onClick={(e) => {
                     e.stopPropagation();
                     onClearImage();
                     if (fileInputRef.current) fileInputRef.current.value = '';
                   }}
                 >
-                  &times;
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                  Remove
                 </button>
               </div>
             </div>
@@ -169,7 +146,7 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
       {/* Recording Duration Setting */}
       <div className="form-row">
         <div className="form-group">
-          <label htmlFor="secondsInput">Trace Duration (Seconds)</label>
+          <label htmlFor="secondsInput">Trace Duration</label>
           <div className="input-with-unit">
             <input
               id="secondsInput"
@@ -180,44 +157,47 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
               step={0.5}
               onChange={(e) => onSecondsChange(parseFloat(e.target.value) || 10.0)}
             />
-            <span className="unit">sec</span>
+            <span className="unit">seconds</span>
           </div>
-          <span className="help-text">Standard rhythm strip window is 10.0 seconds</span>
+          <span className="help-text">Standard rhythm strip span is 10.0 seconds</span>
         </div>
       </div>
 
       {/* Primary Action Button */}
       <button
         type="button"
-        className="btn btn-primary btn-glow"
+        className="btn btn-primary"
         disabled={!canAnalyze}
         onClick={onAnalyze}
       >
         {loading ? (
           <span className="btn-loader">
             <span className="spinner" />
-            Evaluating Cardiac Rhythm...
+            Analyzing Rhythm & Generating Report...
           </span>
         ) : (
           <span className="btn-text">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2">
               <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
             </svg>
-            Run AI Diagnostic Analysis
+            Analyze ECG & Generate Report
           </span>
         )}
       </button>
 
-      {/* Deep Architecture Card */}
-      <div className="info-card">
-        <div className="info-icon">⚡</div>
-        <div className="info-content">
-          <h4>Deep Neural Architecture</h4>
-          <p>
-            Our deep Vision Transformer analyzes 2D spatial waveform contours, detecting absence of
-            organized P-waves, baseline fibrillatory ripples, and conduction disturbances across the
-            cardiac cycle.
-          </p>
+      {/* Clinical Reference Box */}
+      <div className="clinical-specs">
+        <div className="spec-item">
+          <span className="spec-label">Target Condition</span>
+          <span className="spec-val">Atrial Fibrillation (AFib) & Arrhythmias</span>
+        </div>
+        <div className="spec-item">
+          <span className="spec-label">Evaluation Engine</span>
+          <span className="spec-val">Vision Transformer (ViT) Multi-Label</span>
+        </div>
+        <div className="spec-item">
+          <span className="spec-label">Input Requirement</span>
+          <span className="spec-val">Single-lead strip, ≥800px width, ≥8s span</span>
         </div>
       </div>
     </section>

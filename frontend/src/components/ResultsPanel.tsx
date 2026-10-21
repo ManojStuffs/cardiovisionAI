@@ -5,32 +5,38 @@ import { WaveformCanvas } from './WaveformCanvas';
 interface ResultsPanelProps {
   results: DiagnosticResult | null;
   onPrint: () => void;
+  seconds?: number;
 }
 
-export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onPrint }) => {
+export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onPrint, seconds = 10.0 }) => {
   if (!results) {
     return (
-      <section className="panel results-panel">
+      <section className="panel results-panel empty-container">
         <div className="panel-header">
           <div className="panel-title">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 3v18h18M9 9l3 3 5-5" />
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
             </svg>
-            <h2>Diagnostic Intelligence</h2>
+            <h2>Diagnostic Report</h2>
           </div>
         </div>
 
         <div className="empty-state">
           <div className="empty-illustration">
-            <div className="pulse-ring" />
             <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeLinecap="round" strokeLinejoin="round" />
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <line x1="7" y1="12" x2="9" y2="12" />
+              <line x1="11" y1="8" x2="13" y2="16" />
+              <line x1="15" y1="10" x2="17" y2="14" />
             </svg>
           </div>
           <h3>Awaiting ECG Input</h3>
           <p>
-            Select a reference case on the left or upload an ECG image to generate a comprehensive
-            cardiac evaluation.
+            Upload a rhythm strip or paper ECG image on the left, then click <strong>Analyze ECG & Generate Report</strong> to produce a full clinical diagnostic evaluation.
           </p>
         </div>
       </section>
@@ -41,36 +47,47 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onPrint }) 
   const afibProb = results.afib_percentage;
   const topPred = results.predictions && results.predictions[0] ? results.predictions[0] : null;
 
-  // Gauge calculations (r = 50 -> circumference = 314.15)
-  const circumference = 2 * Math.PI * 50;
-  const offset = circumference - (afibProb / 100) * circumference;
-
-  let gaugeColor = 'var(--emerald)';
-  let gaugeStatus = 'Normal Rhythm Profile';
+  // Determine risk category
+  let riskLevel = 'Low Risk';
+  let riskClass = 'risk-low';
   if (afibProb >= 70) {
-    gaugeColor = 'var(--crimson)';
-    gaugeStatus = 'Severe Arrhythmia Risk';
+    riskLevel = 'High Risk';
+    riskClass = 'risk-high';
   } else if (afibProb >= 40) {
-    gaugeColor = 'var(--amber)';
-    gaugeStatus = 'Borderline / Elevated';
+    riskLevel = 'Moderate / Borderline';
+    riskClass = 'risk-mod';
   }
 
+  const formattedDate = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
   return (
-    <section className="panel results-panel">
-      <div className="panel-header">
-        <div className="panel-title">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 3v18h18M9 9l3 3 5-5" />
-          </svg>
-          <h2>Diagnostic Intelligence</h2>
+    <section className="panel results-panel report-mode">
+      {/* Report Header Bar */}
+      <div className="report-header">
+        <div className="report-meta">
+          <span className="report-tag">CLINICAL EVALUATION REPORT</span>
+          <h2 className="report-title">Electrocardiographic Rhythm Analysis</h2>
+          <div className="report-submeta">
+            <span>Generated: {formattedDate}</span>
+            <span>•</span>
+            <span>Recording Window: {seconds.toFixed(1)}s</span>
+            <span>•</span>
+            <span>Engine: {results.engine || 'Vision Transformer (ViT)'}</span>
+          </div>
         </div>
-        <div className="header-actions">
-          <button type="button" className="btn-outline" onClick={onPrint} title="Print or Export Diagnostic Report">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+        <div className="report-actions">
+          <button type="button" className="btn btn-outline print-btn" onClick={onPrint} title="Print or save as PDF">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
               <path d="M6 14h12v8H6z" />
             </svg>
-            Export Report
+            Export / Print Report
           </button>
         </div>
       </div>
@@ -80,12 +97,15 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onPrint }) 
         <div className={`verdict-banner ${isAfib ? 'verdict-afib' : 'verdict-normal'}`}>
           <div className="verdict-icon-container">
             {isAfib ? (
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01" />
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
             ) : (
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3" />
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
               </svg>
             )}
           </div>
@@ -94,134 +114,146 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onPrint }) 
             <h3 className="verdict-title">{results.verdict}</h3>
             <p className="verdict-subtitle">
               {isAfib
-                ? `High irregularity in atrial rhythm identified with ${afibProb}% AFib risk index.`
-                : `Consistent sinus rhythm morphology and regular baseline electrophysiology observed.`}
+                ? `Electrographic characteristics indicate high baseline irregularity and AFib risk index (${afibProb}%).`
+                : `Electrophysiological waveform contours exhibit regular sinus rhythm morphology.`}
             </p>
           </div>
-          <div className={`verdict-badge ${isAfib ? 'badge-urgent' : 'badge-routine'}`}>
-            {isAfib ? 'URGENT CLINICAL REVIEW' : 'PHYSIOLOGICAL SINUS'}
+          <div className="verdict-badge-box">
+            <span className={`verdict-badge ${isAfib ? 'badge-urgent' : 'badge-routine'}`}>
+              {isAfib ? 'URGENT REVIEW' : 'PHYSIOLOGICAL SINUS'}
+            </span>
           </div>
         </div>
 
-        {/* Metrics Row: AFib Risk Meter + Neural Assessment (NO Heart Rate) */}
+        {/* Core Findings Grid */}
         <div className="metrics-grid">
-          {/* Circular Risk Gauge Card */}
-          <div className="metric-card risk-card">
-            <div className="card-title">AFib Risk Probability</div>
-            <div className="gauge-container">
-              <svg className="radial-gauge" viewBox="0 0 120 120">
-                <circle className="gauge-bg" cx="60" cy="60" r="50" />
-                <circle
-                  className="gauge-fill"
-                  cx="60"
-                  cy="60"
-                  r="50"
-                  strokeDasharray="314.15"
-                  strokeDashoffset={offset}
-                  style={{ stroke: gaugeColor }}
-                />
-              </svg>
-              <div className="gauge-center-text">
-                <span className="gauge-value">{afibProb}%</span>
-                <span className="gauge-label">AFIB INDEX</span>
-              </div>
+          {/* AFib Probability Card */}
+          <div className="metric-card">
+            <div className="card-header-clean">
+              <span className="card-title">AFib Risk Index</span>
+              <span className={`risk-pill ${riskClass}`}>{riskLevel}</span>
             </div>
-            <div className="gauge-status" style={{ color: gaugeColor }}>
-              {gaugeStatus}
+            <div className="score-display">
+              <span className="score-num">{afibProb}%</span>
+              <span className="score-label">Probability</span>
+            </div>
+            <div className="score-bar-track">
+              <div
+                className={`score-bar-fill ${riskClass}`}
+                style={{ width: `${Math.min(100, Math.max(4, afibProb))}%` }}
+              />
+            </div>
+            <div className="score-scale">
+              <span>0% Normal</span>
+              <span>40% Borderline</span>
+              <span>100% High Risk</span>
             </div>
           </div>
 
-          {/* Neural Diagnostic Findings Card (NO Heart Rate) */}
-          <div className="metric-card telemetry-card">
-            <div className="card-title">Diagnostic Findings</div>
-            <div className="telemetry-items">
-              <div className="telem-item">
-                <div className="telem-icon">🔍</div>
-                <div className="telem-info">
-                  <span className="telem-value">
-                    {topPred ? topPred.title : isAfib ? 'Atrial Fibrillation' : 'Normal Sinus Rhythm'}
-                  </span>
-                  <span className="telem-label">Primary Rhythm Pattern</span>
-                </div>
+          {/* Clinical Findings Card */}
+          <div className="metric-card">
+            <div className="card-header-clean">
+              <span className="card-title">Diagnostic Assessment</span>
+              <span className="confidence-pill">Confidence: {results.confidence}%</span>
+            </div>
+            <div className="findings-table">
+              <div className="finding-row">
+                <span className="f-label">Primary Pattern:</span>
+                <span className="f-val">
+                  {topPred ? topPred.title : isAfib ? 'Atrial Fibrillation' : 'Normal Sinus Rhythm'}
+                </span>
               </div>
-
-              <div className="telem-item">
-                <div className="telem-icon">🎯</div>
-                <div className="telem-info">
-                  <span className="telem-value">{results.confidence}%</span>
-                  <span className="telem-label">Diagnostic Confidence</span>
-                </div>
+              <div className="finding-row">
+                <span className="f-label">Rhythm Regularity:</span>
+                <span className="f-val">
+                  {isAfib ? 'Irregularly Irregular' : 'Regular Periodic'}
+                </span>
               </div>
-
-              <div className="telem-item">
-                <div className="telem-icon">📈</div>
-                <div className="telem-info">
-                  <span className="telem-value">{isAfib ? 'Marked Irregularity' : 'Regular Periodic'}</span>
-                  <span className="telem-label">Rhythm Regularity</span>
-                </div>
-              </div>
-
-              <div className="telem-item">
-                <div className="telem-icon">🛡️</div>
-                <div className="telem-info">
-                  <span
-                    className="telem-value"
-                    style={{ color: isAfib ? 'var(--crimson)' : 'var(--emerald)' }}
-                  >
-                    {isAfib ? 'High Priority' : 'Routine Baseline'}
-                  </span>
-                  <span className="telem-label">Triage Priority</span>
-                </div>
+              <div className="finding-row">
+                <span className="f-label">Clinical Triage:</span>
+                <span className={`f-val ${isAfib ? 'text-urgent' : 'text-normal'}`}>
+                  {isAfib ? 'Priority Clinical Review' : 'Routine Baseline Observation'}
+                </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Multi-Condition Breakdown */}
+        {/* Multi-Condition Differential Table */}
         <div className="condition-section">
           <div className="section-heading">
-            <h4>Cardiac Rhythm Multi-Class Probabilities</h4>
-            <span className="engine-tag">DeepNet Core</span>
+            <h4>Cardiac Rhythm Differential Classification</h4>
+            <span className="subhead-note">Normalized probabilities across multi-label classes</span>
           </div>
-          <div className="condition-bars">
-            {(results.predictions || []).map((p) => (
-              <div key={p.label} className="condition-item">
-                <div className="condition-top">
-                  <span className="condition-name">
-                    <span className="condition-code">{p.label}</span>
-                    <span>{p.title}</span>
-                  </span>
-                  <span className="condition-pct" style={{ color: p.color }}>
-                    {p.percentage}%
-                  </span>
-                </div>
-                <div className="progress-bar-bg">
-                  <div
-                    className="progress-bar-fill"
-                    style={{
-                      width: `${Math.max(2, p.percentage)}%`,
-                      backgroundColor: p.color,
-                    }}
-                  />
-                </div>
-                <div className="condition-desc">{p.description}</div>
-              </div>
-            ))}
+          <div className="condition-table-wrapper">
+            <table className="condition-table">
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th>Cardiac Condition</th>
+                  <th>Probability</th>
+                  <th>Distribution</th>
+                  <th>Clinical Urgency</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(results.predictions || []).map((p) => {
+                  let badgeUrgency = 'badge-routine';
+                  if (p.urgency === 'URGENT') badgeUrgency = 'badge-urgent';
+                  else if (p.urgency === 'Moderate') badgeUrgency = 'badge-moderate';
+
+                  return (
+                    <tr key={p.label}>
+                      <td className="code-col">
+                        <code>{p.label}</code>
+                      </td>
+                      <td className="name-col">
+                        <span className="cond-title">{p.title}</span>
+                        <span className="cond-desc">{p.description}</span>
+                      </td>
+                      <td className="pct-col">
+                        <strong>{p.percentage}%</strong>
+                      </td>
+                      <td className="bar-col">
+                        <div className="clean-progress-track">
+                          <div
+                            className="clean-progress-fill"
+                            style={{
+                              width: `${Math.max(2, p.percentage)}%`,
+                              backgroundColor: p.label === 'AFIB' ? '#dc2626' : p.label === 'NORM' ? '#16a34a' : '#475569',
+                            }}
+                          />
+                        </div>
+                      </td>
+                      <td className="urgency-col">
+                        <span className={`urgency-badge ${badgeUrgency}`}>
+                          {p.urgency}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* Digitized Waveform Visualizer */}
+        {/* Digitized Waveform Visualizer on Calibrated Paper */}
         {results.telemetry?.waveform_preview && (
           <WaveformCanvas waveform={results.telemetry.waveform_preview} />
         )}
 
-        {/* Clinical Disclaimer */}
+        {/* Formal Medical Advisory Notice */}
         <div className="clinical-notice">
-          <div className="notice-icon">📋</div>
+          <div className="notice-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
           <div className="notice-text">
-            <strong>Clinical Decision Support Notice:</strong> This AI system is engineered for rhythm screening
-            and diagnostic assistance. Suspected arrhythmias or acute ischemic markers must be evaluated by
-            qualified medical professionals in conjunction with complete 12-lead electrocardiography.
+            <strong>Clinical Decision Support Advisory:</strong> This automated interpretation is provided as diagnostic assistance for trained healthcare providers. It is not an autonomous diagnostic determination. Suspected arrhythmias or conduction disturbances must be corroborated with full 12-lead electrocardiography, patient symptoms, and expert clinical judgment.
           </div>
         </div>
       </div>

@@ -17,7 +17,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ waveform }) => {
     const container = canvas.parentElement;
     if (container) {
       canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight || 160;
+      canvas.height = container.clientHeight || 170;
     }
 
     const W = canvas.width;
@@ -27,20 +27,39 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ waveform }) => {
 
     if (values.length < 2) return;
 
-    // Draw clinical ECG grid background
+    // Draw standard clinical ECG calibrated paper background
     ctx.clearRect(0, 0, W, H);
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.04)';
-    ctx.lineWidth = 1;
+    ctx.fillStyle = '#fffdfa';
+    ctx.fillRect(0, 0, W, H);
 
-    // Grid lines
-    const gridStep = 18;
-    for (let x = 0; x < W; x += gridStep) {
+    // Minor grid (1 mm equivalent)
+    ctx.strokeStyle = '#fee2e2';
+    ctx.lineWidth = 0.6;
+    const minorStep = 5;
+    for (let x = 0; x < W; x += minorStep) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, H);
       ctx.stroke();
     }
-    for (let y = 0; y < H; y += gridStep) {
+    for (let y = 0; y < H; y += minorStep) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+
+    // Major grid (5 mm equivalent)
+    ctx.strokeStyle = '#fca5a5';
+    ctx.lineWidth = 1.0;
+    const majorStep = 25;
+    for (let x = 0; x < W; x += majorStep) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+    }
+    for (let y = 0; y < H; y += majorStep) {
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(W, y);
@@ -48,7 +67,8 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ waveform }) => {
     }
 
     // Baseline axis
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, H / 2);
     ctx.lineTo(W, H / 2);
@@ -70,7 +90,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ waveform }) => {
       return H - pad - (val - minVal) * scaleY;
     };
 
-    // Draw main ECG lead trace
+    // Draw main ECG trace line (clean clinical ink, no glowing neon shadow)
     ctx.beginPath();
     const xStep = W / (values.length - 1);
     ctx.moveTo(0, toCanvasY(values[0]));
@@ -79,19 +99,16 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ waveform }) => {
       ctx.lineTo(i * xStep, toCanvasY(values[i]));
     }
 
-    ctx.strokeStyle = '#00f0ff';
-    ctx.lineWidth = 2;
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = 'rgba(0, 240, 255, 0.4)';
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.8;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
-    // Peak markers
+    // Peak markers (solid clinical red dots)
     if (waveform.times && waveform.times.length === values.length && peakTimes.length > 0) {
       const maxTime = waveform.times[waveform.times.length - 1] || 1;
-      ctx.fillStyle = '#ff3366';
-      ctx.shadowBlur = 8;
-      ctx.shadowColor = '#ff3366';
+      ctx.fillStyle = '#dc2626';
 
       peakTimes.forEach((pt) => {
         const px = (pt / maxTime) * W;
@@ -102,27 +119,32 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ waveform }) => {
         const py = toCanvasY(values[sampleIdx]);
 
         ctx.beginPath();
-        ctx.arc(px, py, 4, 0, 2 * Math.PI);
+        ctx.arc(px, py, 3.5, 0, 2 * Math.PI);
         ctx.fill();
       });
-      ctx.shadowBlur = 0;
     }
   }, [waveform]);
 
   return (
     <div className="waveform-section">
       <div className="section-heading">
-        <h4>Digitized ECG Waveform Trace</h4>
-        <span className="legend">
-          <span className="legend-dot" /> Segment Peaks
-        </span>
+        <h4>Digitized ECG Rhythm Strip</h4>
+        <div className="legend">
+          <span className="legend-item">
+            <span className="legend-line" /> Lead Voltage Trace
+          </span>
+          <span className="legend-item">
+            <span className="legend-dot" /> Detected R-Peaks
+          </span>
+        </div>
       </div>
       <div className="waveform-canvas-container">
-        <canvas ref={canvasRef} height={160} />
+        <canvas ref={canvasRef} height={170} />
       </div>
-      <p className="waveform-caption">
-        Lead voltage contour extracted from the image across the recording window.
-      </p>
+      <div className="waveform-meta-row">
+        <span>Standard Calibration: 25 mm/s, 10 mm/mV</span>
+        <span>Contour extracted from uploaded recording</span>
+      </div>
     </div>
   );
 };
