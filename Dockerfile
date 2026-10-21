@@ -45,14 +45,16 @@ COPY hf_predict.py ./
 # Copy built frontend assets from stage 1
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
-# Set user permissions
-RUN chown -R appuser:appuser /app
+# Create scratch directory for runtime file uploads and ensure permissions
+RUN mkdir -p /app/scratch && chown -R appuser:appuser /app
+
+# Switch to non-root user
 USER appuser
 
-# Standard port for Hugging Face Spaces is 7860 (can be overridden via $PORT)
+# Standard port for Hugging Face Spaces is 7860 (Render/Railway inject custom $PORT)
 ENV PORT=7860
 ENV PYTHONUNBUFFERED=1
 EXPOSE 7860
 
-# Run with Gunicorn production WSGI server
-CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "1", "--threads", "4", "--timeout", "180", "backend.server:app"]
+# Run with Gunicorn WSGI server dynamically binding to $PORT (defaults to 7860)
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-7860} --workers 1 --threads 4 --timeout 180 backend.server:app"]

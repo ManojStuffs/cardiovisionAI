@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  cardiovision-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cardiovision-ai
+    ports:
+      - "7860:7860"
+    environment:
+      - PORT=7860
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

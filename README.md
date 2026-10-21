@@ -11,7 +11,14 @@ pinned: false
 # AFib Detection — CardioVision AI Platform
 
 Mirrors the slides: **Icentia11k → signal processing → R-peaks → RR sequences → CNN → BiLSTM**.
-Attention + final output are the next stage (the model is already shaped for it, see below).
+## 🚀 Quick Launch & Production Deployment
+
+See complete deployment instructions in [DEPLOYMENT.md](DEPLOYMENT.md).
+
+* **One-Click Local App:** Run `run_local.bat` or `python backend/server.py` (opens `http://localhost:5000`).
+* **Docker Compose:** Run `docker compose up --build` (opens `http://localhost:7860`).
+* **Instant External Link (Viva / Demo):** Run `share_public.bat` or `npx localtunnel --port 5000`.
+* **Hugging Face Spaces (Free Cloud):** Push to Hugging Face Spaces (Docker SDK) for 16 GB RAM free hosting.
 
 ## Layout
 | File | Slide / stage |
