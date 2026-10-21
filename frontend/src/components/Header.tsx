@@ -1,11 +1,14 @@
 import React from 'react';
-import type { SystemStatus } from '../types';
+import type { SystemStatus, User } from '../types';
 
 interface HeaderProps {
   systemStatus: SystemStatus | null;
+  currentUser: User | null;
+  onOpenAuth: () => void;
+  onLogout: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ systemStatus }) => {
+export const Header: React.FC<HeaderProps> = ({ systemStatus, currentUser, onOpenAuth, onLogout }) => {
   return (
     <header className="app-header">
       <div className="header-container">
@@ -29,14 +32,28 @@ export const Header: React.FC<HeaderProps> = ({ systemStatus }) => {
             </span>
           </div>
 
-          <div className="model-badge" title="Underlying Neural Network">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <line x1="3" y1="9" x2="21" y2="9" />
-              <line x1="9" y1="21" x2="9" y2="9" />
-            </svg>
-            <span>{systemStatus?.architecture || 'Vision Transformer (ViT)'}</span>
-          </div>
+          {/* User Account / Role Badge */}
+          {currentUser ? (
+            <div className="user-profile-widget">
+              <div className={`user-badge ${currentUser.role === 'doctor' ? 'doctor-badge' : 'patient-badge'}`}>
+                <span className="user-avatar-icon">{currentUser.role === 'doctor' ? '👨‍⚕️' : '👤'}</span>
+                <div className="user-text-info">
+                  <strong>{currentUser.name}</strong>
+                  <span className="user-role-label">
+                    {currentUser.role === 'doctor' ? 'ATTENDING DOCTOR' : 'VERIFIED PATIENT'}
+                  </span>
+                </div>
+              </div>
+              <button className="auth-btn-header logout-btn" onClick={onLogout} title="Sign Out">
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <button className="auth-btn-header login-btn" onClick={onOpenAuth}>
+              <span className="login-icon">🔒</span>
+              Sign In / Register
+            </button>
+          )}
         </div>
       </div>
     </header>

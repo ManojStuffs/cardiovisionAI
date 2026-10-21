@@ -1,14 +1,49 @@
-import React from 'react';
-import type { DiagnosticResult } from '../types';
+import React, { useState, useEffect } from 'react';
+import type { DiagnosticResult, PatientOption } from '../types';
 import { WaveformCanvas } from './WaveformCanvas';
 
 interface ResultsPanelProps {
   results: DiagnosticResult | null;
   onPrint: () => void;
   seconds?: number;
+  selectedPatient?: PatientOption | null;
+  onPublishReport?: (notes: string, recommendation: string) => Promise<boolean>;
 }
 
-export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onPrint, seconds = 10.0 }) => {
+export const ResultsPanel: React.FC<ResultsPanelProps> = ({
+  results,
+  onPrint,
+  seconds = 10.0,
+  selectedPatient,
+  onPublishReport,
+}) => {
+  const [doctorNotes, setDoctorNotes] = useState('');
+  const [recommendation, setRecommendation] = useState('');
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState(false);
+
+  // Initialize doctor observations based on results
+  useEffect(() => {
+    if (results) {
+      setPublished(false);
+      if (results.is_afib) {
+        setDoctorNotes(
+          `Electrocardiographic rhythm strip demonstrates irregular RR intervals with fibrillation waves (CV: ${results.telemetry?.rr_cv || 0.21}). Findings confirm Atrial Fibrillation.`
+        );
+        setRecommendation(
+          `Initiate oral anticoagulation (NOAC) therapy pending CHA2DS2-VASc score. Recommend outpatient 24-48h Holter monitoring and comprehensive echocardiogram evaluation.`
+        );
+      } else {
+        setDoctorNotes(
+          `Normal sinus rhythm confirmed with uniform P-wave morphology and regular RR progression. No evidence of atrial fibrillation or ectopic rhythm.`
+        );
+        setRecommendation(
+          `Continue standard routine cardiac care. Follow up in clinic in 6-12 months or sooner if cardiac symptoms recur.`
+        );
+      }
+    }
+  }, [results]);
+
   if (!results) {
     return (
       <section className="panel results-panel empty-container">
@@ -21,7 +56,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onPrint, se
               <line x1="16" y1="17" x2="8" y2="17" />
               <polyline points="10 9 9 9 8 9" />
             </svg>
-            <h2>Diagnostic Report</h2>
+            <h2>Diagnostic Evaluation & Clinical Report</h2>
           </div>
         </div>
 
@@ -34,9 +69,11 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onPrint, se
               <line x1="15" y1="10" x2="17" y2="14" />
             </svg>
           </div>
-          <h3>Awaiting ECG Input</h3>
+          <h3>Awaiting Doctor Analysis</h3>
           <p>
-            Upload a rhythm strip or paper ECG image on the left, then click <strong>Analyze ECG & Generate Report</strong> to produce a full clinical diagnostic evaluation.
+            Upload a rhythm strip or select a reference ECG on the left, then click{' '}
+            <strong>Analyze ECG & Generate Report</strong> to inspect the side-by-side diagnostic findings and release
+            the report to your patient.
           </p>
         </div>
       </section>
@@ -45,7 +82,6 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onPrint, se
 
   const isAfib = results.is_afib;
   const afibProb = results.afib_percentage;
-  const topPred = results.predictions && results.predictions[0] ? results.predictions[0] : null;
 
   // Determine risk category
   let riskLevel = 'Low Risk';
@@ -65,6 +101,17 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onPrint, se
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  const handlePublish = async () => {
+    if (!onPublishReport) return;
+    setPublishing(true);
+    try {
+      const ok = await onPublishReport(doctorNotes, recommendation);
+      if (ok) setPublished(true);
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   return (
     <section className="panel results-panel report-mode">
@@ -98,9 +145,9 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onPrint, se
           <div className="verdict-icon-container">
             {isAfib ? (
               <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
             ) : (
               <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2.2">
@@ -109,91 +156,142 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onPrint, se
               </svg>
             )}
           </div>
-          <div className="verdict-details">
-            <span className="verdict-eyebrow">DIAGNOSTIC VERDICT</span>
-            <h3 className="verdict-title">{results.verdict}</h3>
-            <p className="verdict-subtitle">
+          <div className="verdict-text-block">
+            <span className="verdict-label">PRIMARY CLINICAL DETERMINATION</span>
+            <h3 className="verdict-headline">{results.verdict}</h3>
+            <p className="verdict-detail">
               {isAfib
-                ? `Electrographic characteristics indicate high baseline irregularity and AFib risk index (${afibProb}%).`
-                : `Electrophysiological waveform contours exhibit regular sinus rhythm morphology.`}
+                ? `Significant electrophysiological irregularity detected with high-frequency fibrillatory activity and absence of distinct P-waves. Confidence: ${afibProb.toFixed(1)}%.`
+                : `Normal cardiac conduction pattern identified with regular sinoatrial activation. Diagnostic probability of Atrial Fibrillation is minimal (${afibProb.toFixed(1)}%).`}
             </p>
           </div>
-          <div className="verdict-badge-box">
-            <span className={`verdict-badge ${isAfib ? 'badge-urgent' : 'badge-routine'}`}>
-              {isAfib ? 'URGENT REVIEW' : 'PHYSIOLOGICAL SINUS'}
+        </div>
+
+        {/* Doctor Publish to Patient Card */}
+        {onPublishReport && selectedPatient && (
+          <div className="publish-report-card">
+            <div className="publish-header">
+              <div className="publish-title">
+                <span className="publish-icon">📋</span>
+                <div>
+                  <h4>Certify & Release Report to Patient</h4>
+                  <p>Assign this verified diagnosis to: <b>{selectedPatient.name}</b> ({selectedPatient.title || selectedPatient.email})</p>
+                </div>
+              </div>
+              {published && (
+                <span className="published-badge">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Released to Patient Portal
+                </span>
+              )}
+            </div>
+
+            <div className="publish-form">
+              <div className="publish-field">
+                <label>Doctor's Clinical Observations</label>
+                <textarea
+                  rows={2}
+                  value={doctorNotes}
+                  onChange={(e) => setDoctorNotes(e.target.value)}
+                  placeholder="Enter physician observations..."
+                />
+              </div>
+
+              <div className="publish-field">
+                <label>Clinical Action / Prescription Recommendation</label>
+                <textarea
+                  rows={2}
+                  value={recommendation}
+                  onChange={(e) => setRecommendation(e.target.value)}
+                  placeholder="Enter patient recommendations, medications, follow-up..."
+                />
+              </div>
+
+              <button
+                type="button"
+                className="btn-publish-patient"
+                disabled={publishing}
+                onClick={handlePublish}
+              >
+                {publishing ? (
+                  <span>Saving & Signing Report...</span>
+                ) : published ? (
+                  <span>✓ Update & Re-release Report to {selectedPatient.name}</span>
+                ) : (
+                  <span>Publish Report to {selectedPatient.name}'s Portal →</span>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Key Diagnostic Metrics Grid */}
+        <div className="metrics-summary-grid">
+          <div className="metric-cell">
+            <span className="cell-label">AFib Probability</span>
+            <span className={`cell-val ${isAfib ? 'text-danger' : 'text-success'}`}>
+              {afibProb.toFixed(1)}%
+            </span>
+            <div className="clean-progress-track">
+              <div
+                className="clean-progress-fill"
+                style={{
+                  width: `${Math.max(2, afibProb)}%`,
+                  backgroundColor: isAfib ? '#dc2626' : '#16a34a',
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="metric-cell">
+            <span className="cell-label">Clinical Risk Tier</span>
+            <span className={`cell-val badge-val ${riskClass}`}>
+              {riskLevel}
+            </span>
+            <span className="cell-sub">Based on ViT & R-peak entropy</span>
+          </div>
+
+          <div className="metric-cell">
+            <span className="cell-label">Detected R-Peaks</span>
+            <span className="cell-val">
+              {results.telemetry?.n_beats !== undefined ? `${results.telemetry.n_beats} beats` : '--'}
+            </span>
+            <span className="cell-sub">
+              Sampling Rate: {results.telemetry?.sampling_rate || 250} Hz
+            </span>
+          </div>
+
+          <div className="metric-cell">
+            <span className="cell-label">RR Variability (CV)</span>
+            <span className="cell-val">
+              {results.telemetry?.rr_cv !== undefined && results.telemetry?.rr_cv !== null
+                ? results.telemetry.rr_cv.toFixed(3)
+                : '--'}
+            </span>
+            <span className="cell-sub">
+              {results.telemetry?.rr_cv && results.telemetry.rr_cv > 0.15 ? 'Irregular (High CV)' : 'Regular (Normal CV)'}
             </span>
           </div>
         </div>
 
-        {/* Core Findings Grid */}
-        <div className="metrics-grid">
-          {/* AFib Probability Card */}
-          <div className="metric-card">
-            <div className="card-header-clean">
-              <span className="card-title">AFib Risk Index</span>
-              <span className={`risk-pill ${riskClass}`}>{riskLevel}</span>
-            </div>
-            <div className="score-display">
-              <span className="score-num">{afibProb}%</span>
-              <span className="score-label">Probability</span>
-            </div>
-            <div className="score-bar-track">
-              <div
-                className={`score-bar-fill ${riskClass}`}
-                style={{ width: `${Math.min(100, Math.max(4, afibProb))}%` }}
-              />
-            </div>
-            <div className="score-scale">
-              <span>0% Normal</span>
-              <span>40% Borderline</span>
-              <span>100% High Risk</span>
-            </div>
+        {/* Comprehensive Multilabel Arrhythmia Spectrum Table */}
+        <div className="section-block">
+          <div className="section-title-bar">
+            <h4>Arrhythmia Multi-Label Differential</h4>
+            <span className="section-badge">Vision Transformer (ViT)</span>
           </div>
 
-          {/* Clinical Findings Card */}
-          <div className="metric-card">
-            <div className="card-header-clean">
-              <span className="card-title">Diagnostic Assessment</span>
-              <span className="confidence-pill">Confidence: {results.confidence}%</span>
-            </div>
-            <div className="findings-table">
-              <div className="finding-row">
-                <span className="f-label">Primary Pattern:</span>
-                <span className="f-val">
-                  {topPred ? topPred.title : isAfib ? 'Atrial Fibrillation' : 'Normal Sinus Rhythm'}
-                </span>
-              </div>
-              <div className="finding-row">
-                <span className="f-label">Rhythm Regularity:</span>
-                <span className="f-val">
-                  {isAfib ? 'Irregularly Irregular' : 'Regular Periodic'}
-                </span>
-              </div>
-              <div className="finding-row">
-                <span className="f-label">Clinical Triage:</span>
-                <span className={`f-val ${isAfib ? 'text-urgent' : 'text-normal'}`}>
-                  {isAfib ? 'Priority Clinical Review' : 'Routine Baseline Observation'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Multi-Condition Differential Table */}
-        <div className="condition-section">
-          <div className="section-heading">
-            <h4>Cardiac Rhythm Differential Classification</h4>
-            <span className="subhead-note">Normalized probabilities across multi-label classes</span>
-          </div>
-          <div className="condition-table-wrapper">
-            <table className="condition-table">
+          <div className="table-responsive">
+            <table className="clinical-table">
               <thead>
                 <tr>
                   <th>Class</th>
-                  <th>Cardiac Condition</th>
+                  <th>Clinical Condition</th>
                   <th>Probability</th>
-                  <th>Distribution</th>
-                  <th>Clinical Urgency</th>
+                  <th style={{ width: '35%' }}>Distribution</th>
+                  <th>Urgency</th>
                 </tr>
               </thead>
               <tbody>
@@ -253,7 +351,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onPrint, se
             </svg>
           </div>
           <div className="notice-text">
-            <strong>Clinical Decision Support Advisory:</strong> This automated interpretation is provided as diagnostic assistance for trained healthcare providers. It is not an autonomous diagnostic determination. Suspected arrhythmias or conduction disturbances must be corroborated with full 12-lead electrocardiography, patient symptoms, and expert clinical judgment.
+            <strong>Clinical Decision Support Advisory:</strong> This automated interpretation is provided as diagnostic assistance for licensed healthcare providers. Suspected arrhythmias or conduction disturbances must be corroborated with patient symptoms and expert clinical judgment.
           </div>
         </div>
       </div>

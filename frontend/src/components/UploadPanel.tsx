@@ -1,4 +1,5 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import type { PatientOption, SampleItem } from '../types';
 
 interface UploadPanelProps {
   selectedFile: File | null;
@@ -10,6 +11,9 @@ interface UploadPanelProps {
   onSecondsChange: (val: number) => void;
   onAnalyze: () => void;
   loading: boolean;
+  patients: PatientOption[];
+  selectedPatient: PatientOption | null;
+  onSelectPatient: (patient: PatientOption) => void;
 }
 
 export const UploadPanel: React.FC<UploadPanelProps> = ({
@@ -22,8 +26,20 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
   onSecondsChange,
   onAnalyze,
   loading,
+  patients,
+  selectedPatient,
+  onSelectPatient,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [samples, setSamples] = useState<SampleItem[]>([]);
+  const [loadingSamples, setLoadingSamples] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/samples')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setSamples(data))
+      .catch((err) => console.warn('Could not load sample images', err));
+  }, []);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -48,6 +64,20 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
     }
   };
 
+  const handleSelectSample = async (sample: SampleItem) => {
+    setLoadingSamples(true);
+    try {
+      const res = await fetch(sample.url);
+      const blob = await res.blob();
+      const file = new File([blob], sample.filename, { type: 'image/png' });
+      onSelectFile(file);
+    } catch (err) {
+      console.error('Failed to load sample', err);
+    } finally {
+      setLoadingSamples(false);
+    }
+  };
+
   const canAnalyze = !loading && selectedFile !== null;
 
   return (
@@ -57,9 +87,40 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
           </svg>
-          <h2>ECG Trace Input</h2>
+          <h2>Doctor Diagnostic Console</h2>
         </div>
-        <span className="panel-subtitle">Upload rhythm strip image for automated arrhythmia evaluation</span>
+        <span className="panel-subtitle">Upload patient ECG rhythm strip for AI electrophysiology evaluation</span>
+      </div>
+
+      {/* Target Patient Selector */}
+      <div className="patient-selector-box">
+        <label htmlFor="patientSelect">
+          <span className="label-icon">👤</span> Assign Analysis to Patient
+        </label>
+        <select
+          id="patientSelect"
+          className="patient-dropdown"
+          value={selectedPatient ? selectedPatient.id : ''}
+          onChange={(e) => {
+            const p = patients.find((item) => item.id === parseInt(e.target.value, 10));
+            if (p) onSelectPatient(p);
+          }}
+        >
+          {patients.length === 0 ? (
+            <option value="">No registered patients found</option>
+          ) : (
+            patients.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} — {p.title || p.email}
+              </option>
+            ))
+          )}
+        </select>
+        <span className="patient-hint">
+          {selectedPatient
+            ? `Report will be certified and released to ${selectedPatient.name}'s secure portal.`
+            : 'Select patient to receive this finalized report.'}
+        </span>
       </div>
 
       {/* Drag & Drop Upload Zone */}
@@ -91,9 +152,9 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
             </div>
-            <h3>Upload ECG Rhythm Strip</h3>
+            <h3>Upload Patient ECG Rhythm Strip</h3>
             <p>Drag and drop image file here, or click to browse</p>
-            <span className="format-note">Supports PNG, JPG, JPEG, TIFF (rhythm strips or cropped 12-lead rows)</span>
+            <span className="format-note">Supports PNG, JPG, JPEG, TIFF (lead rhythm strip, ≥800px width)</span>
             <button
               type="button"
               className="btn btn-secondary browse-btn"
@@ -143,6 +204,26 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
         )}
       </div>
 
+      {/* Quick Reference Samples */}
+      {samples.length > 0 && (
+        <div className="sample-strips-selector">
+          <label>Or Load Reference Clinical Strip:</label>
+          <div className="sample-chips">
+            {samples.map((s) => (
+              <button
+                key={s.filename}
+                type="button"
+                className={`sample-chip ${s.is_afib ? 'afib-sample' : 'normal-sample'}`}
+                disabled={loadingSamples}
+                onClick={() => handleSelectSample(s)}
+              >
+                {s.is_afib ? '🚨' : '✅'} {s.display_name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Recording Duration Setting */}
       <div className="form-row">
         <div className="form-group">
@@ -159,7 +240,7 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
             />
             <span className="unit">seconds</span>
           </div>
-          <span className="help-text">Standard rhythm strip span is 10.0 seconds</span>
+          <span className="help-text">Standard calibrated rhythm strip span is 10.0 seconds</span>
         </div>
       </div>
 
@@ -173,7 +254,7 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
         {loading ? (
           <span className="btn-loader">
             <span className="spinner" />
-            Analyzing Rhythm & Generating Report...
+            Evaluating Rhythm with Vision Transformer...
           </span>
         ) : (
           <span className="btn-text">
@@ -188,16 +269,16 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
       {/* Clinical Reference Box */}
       <div className="clinical-specs">
         <div className="spec-item">
-          <span className="spec-label">Target Condition</span>
-          <span className="spec-val">Atrial Fibrillation (AFib) & Arrhythmias</span>
+          <span className="spec-label">Assigned Attending</span>
+          <span className="spec-val">Authorized Medical Doctor</span>
         </div>
         <div className="spec-item">
-          <span className="spec-label">Evaluation Engine</span>
-          <span className="spec-val">Vision Transformer (ViT) Multi-Label</span>
+          <span className="spec-label">Target Patient</span>
+          <span className="spec-val">{selectedPatient?.name || 'Pending Selection'}</span>
         </div>
         <div className="spec-item">
-          <span className="spec-label">Input Requirement</span>
-          <span className="spec-val">Single-lead strip, ≥800px width, ≥8s span</span>
+          <span className="spec-label">Neural Engine</span>
+          <span className="spec-val">ViT Multi-Label + Pan-Tompkins QRS</span>
         </div>
       </div>
     </section>
