@@ -1,18 +1,17 @@
 import { useState, useEffect } from 'react';
 import type { DiagnosticResult, SystemStatus, User, PatientOption } from './types';
 import { Header } from './components/Header';
+import { AuthScreen } from './components/AuthScreen';
 import { UploadPanel } from './components/UploadPanel';
 import { ResultsPanel } from './components/ResultsPanel';
 import { PatientPortal } from './components/PatientPortal';
-import { AuthModal } from './components/AuthModal';
 
 export function App() {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
 
-  // Authentication state
+  // Authentication state - Strictly gated, no auto-login
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
-  const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
 
   // Doctor Workspace state
   const [patients, setPatients] = useState<PatientOption[]>([]);
@@ -24,36 +23,24 @@ export function App() {
   const [loading, setLoading] = useState<boolean>(false);
   const [results, setResults] = useState<DiagnosticResult | null>(null);
 
-  // Load stored auth or auto-login default Doctor on first visit
+  // Session verification: Ensure token is actively validated before granting access
   useEffect(() => {
-    const savedToken = localStorage.getItem('cv_token');
-    const savedUser = localStorage.getItem('cv_user');
+    const savedToken = sessionStorage.getItem('cv_token') || localStorage.getItem('cv_token');
 
-    if (savedToken && savedUser) {
-      try {
-        setAuthToken(savedToken);
-        setCurrentUser(JSON.parse(savedUser));
-      } catch {
-        localStorage.removeItem('cv_token');
-        localStorage.removeItem('cv_user');
-      }
-    } else {
-      // Auto-login default Doctor for frictionless initial experience
-      fetch('/api/auth/demo-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: 'doctor' }),
+    if (savedToken) {
+      fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${savedToken}` },
       })
         .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data?.token && data?.user) {
-            setAuthToken(data.token);
-            setCurrentUser(data.user);
-            localStorage.setItem('cv_token', data.token);
-            localStorage.setItem('cv_user', JSON.stringify(data.user));
+        .then((userData: User | null) => {
+          if (userData && userData.id) {
+            setAuthToken(savedToken);
+            setCurrentUser(userData);
+          } else {
+            handleLogout();
           }
         })
-        .catch((err) => console.warn('Demo login notice:', err));
+        .catch(() => handleLogout());
     }
 
     // Fetch system status
@@ -65,7 +52,7 @@ export function App() {
       .catch((err) => console.warn('Status check notice:', err));
   }, []);
 
-  // Fetch registered patients for Doctor
+  // When Doctor is logged in, fetch registered patients for clinical assignment
   useEffect(() => {
     if (currentUser?.role === 'doctor' && authToken) {
       fetch('/api/doctor/patients', {
@@ -95,22 +82,8 @@ export function App() {
     localStorage.removeItem('cv_token');
     localStorage.removeItem('cv_user');
     setResults(null);
-  };
-
-  const handleQuickSwitchRole = async (targetRole: 'doctor' | 'patient') => {
-    try {
-      const res = await fetch('/api/auth/demo-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: targetRole }),
-      });
-      const data = await res.json();
-      if (res.ok && data.token && data.user) {
-        handleAuthSuccess(data.token, data.user);
-      }
-    } catch (err) {
-      console.error('Role switch failed:', err);
-    }
+    setSelectedFile(null);
+    setPreviewUrl(null);
   };
 
   const handleSelectFile = (file: File) => {
@@ -191,7 +164,7 @@ export function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to publish report.');
 
-      alert(`Official report certified and published to ${selectedPatient.name}'s Patient Portal!`);
+      alert(`Official diagnostic report certified and released to ${selectedPatient.name}'s medical record.`);
       return true;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Publish failed';
@@ -204,71 +177,22 @@ export function App() {
     window.print();
   };
 
+  // GATEKEEPER: If user is not authenticated, show the clinical Login/Sign-in portal
+  if (!currentUser) {
+    return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
+  }
+
   return (
     <div className="app-root">
-      {/* Institutional Clinical Header */}
+      {/* Institutional Top Navigation */}
       <Header
         systemStatus={systemStatus}
         currentUser={currentUser}
-        onOpenAuth={() => setAuthModalOpen(true)}
         onLogout={handleLogout}
       />
 
-      {/* Role Navigation & Mode Switcher Bar */}
-      {currentUser && (
-        <div className="role-switcher-banner no-print">
-          <div className="banner-badge">
-            <span className="pulse-indicator" />
-            <span>
-              Active Role: <b>{currentUser.role === 'doctor' ? 'Medical Doctor Console' : 'Patient Records Portal'}</b> (
-              {currentUser.name})
-            </span>
-          </div>
-
-          <div className="role-switch-actions">
-            {currentUser.role === 'doctor' ? (
-              <button
-                className="role-toggle-btn switch-to-patient"
-                onClick={() => handleQuickSwitchRole('patient')}
-                title="Switch to Patient view to see what your patient sees"
-              >
-                <span>👤 Switch to Patient Portal (John Doe) →</span>
-              </button>
-            ) : (
-              <button
-                className="role-toggle-btn switch-to-doctor"
-                onClick={() => handleQuickSwitchRole('doctor')}
-                title="Switch back to Doctor Console to analyze ECG traces"
-              >
-                <span>🩺 Switch to Doctor Console (Dr. Sarah Smith) →</span>
-              </button>
-            )}
-
-            <button className="change-account-btn" onClick={() => setAuthModalOpen(true)}>
-              Switch / Sign In with Another Email
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Main Content Area based on User Role */}
-      {!currentUser ? (
-        <div className="unauth-landing">
-          <div className="unauth-card">
-            <div className="unauth-icon">🫀</div>
-            <h2>CardioVision Clinical Portal</h2>
-            <p>
-              Please sign in with your email verification code to access the diagnostic workstation or your patient
-              records.
-            </p>
-            <div className="unauth-actions">
-              <button className="btn btn-primary" onClick={() => setAuthModalOpen(true)}>
-                Sign In / Register with Email Verification →
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : currentUser.role === 'doctor' ? (
+      {/* Main Workstation based on Authorized Role */}
+      {currentUser.role === 'doctor' ? (
         /* DOCTOR WORKSPACE: Dual-Panel Side-by-Side Analysis */
         <main className="main-container">
           <UploadPanel
@@ -295,18 +219,11 @@ export function App() {
           />
         </main>
       ) : (
-        /* PATIENT PORTAL: View only doctor-released reports for their name */
+        /* PATIENT PORTAL: Viewing certified reports from chosen Attending Doctor */
         <main className="patient-container">
           <PatientPortal user={currentUser} token={authToken || ''} />
         </main>
       )}
-
-      {/* Authentication & Verification Modal */}
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        onAuthSuccess={handleAuthSuccess}
-      />
     </div>
   );
 }

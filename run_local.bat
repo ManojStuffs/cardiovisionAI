@@ -1,7 +1,7 @@
 @echo off
 title CardioVision AI — Local Server Launcher
 echo ==========================================================
-echo    CardioVision AI - AFib Detection & Cardiac Platform
+echo    CardioVision AI - AFib Detection and Cardiac Platform
 echo ==========================================================
 echo.
 

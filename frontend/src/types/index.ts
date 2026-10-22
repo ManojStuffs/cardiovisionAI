@@ -37,6 +37,7 @@ export interface DiagnosticResult {
   analyzing_doctor?: {
     name: string;
     title: string;
+    license_number?: string;
   };
 }
 
@@ -62,6 +63,16 @@ export interface User {
   email: string;
   role: 'doctor' | 'patient';
   title?: string;
+  license_number?: string;
+  doctor_id?: number | null;
+}
+
+export interface DoctorOption {
+  id: number;
+  name: string;
+  email: string;
+  title?: string;
+  license_number?: string;
 }
 
 export interface PatientOption {
@@ -69,6 +80,7 @@ export interface PatientOption {
   name: string;
   email: string;
   title?: string;
+  doctor_id?: number | null;
 }
 
 export interface ClinicalReport {

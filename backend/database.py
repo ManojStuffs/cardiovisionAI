@@ -1,7 +1,7 @@
 """CardioVision AI — Clinical Database & Role-Based Security Engine.
 
-Manages Users, Roles (Doctor, Patient), Secure OTPs, Email Verification,
-and Clinical Patient Diagnostic Reports using SQLite.
+Manages Users, Roles (Doctor with License Number, Patient assigned to Doctor),
+Secure OTPs, Email Verification, and Clinical Diagnostic Reports using SQLite.
 """
 from __future__ import annotations
 import os
@@ -53,7 +53,6 @@ def generate_auth_token(user: Dict[str, Any]) -> str:
     }
     payload_str = json.dumps(payload, separators=(',', ':'))
     signature = hmac.new(SECRET_KEY.encode("utf-8"), payload_str.encode("utf-8"), hashlib.sha256).hexdigest()
-    # base64-like hex encoding
     raw = f"{payload_str.encode('utf-8').hex()}.{signature}"
     return raw
 
@@ -77,23 +76,36 @@ def verify_auth_token(token: str) -> Optional[Dict[str, Any]]:
 
 
 def init_db():
-    """Initialize database tables and seed sample accounts."""
+    """Initialize database tables and run schema migrations."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Users Table
+    # Users Table with Doctor License & Patient Doctor Assignment
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        role TEXT NOT NULL,          -- 'doctor' or 'patient'
-        title TEXT DEFAULT '',       -- e.g. 'Cardiologist' or 'Patient Age: 58'
+        role TEXT NOT NULL,               -- 'doctor' or 'patient'
+        title TEXT DEFAULT '',            -- Specialty or Age/MRN
+        license_number TEXT DEFAULT '',   -- Mandatory for Doctor
+        doctor_id INTEGER DEFAULT NULL,   -- For Patient: chosen Doctor
         is_verified INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
+
+    # Schema migration checks for existing tables
+    cursor.execute("PRAGMA table_info(users)")
+    user_cols = [c["name"] for c in cursor.fetchall()]
+    if "license_number" not in user_cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN license_number TEXT DEFAULT ''")
+    if "doctor_id" not in user_cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN doctor_id INTEGER DEFAULT NULL")
+
+    # Ensure any preexisting doctor records without a license get an official ID
+    cursor.execute("UPDATE users SET license_number = 'MD-CARDIO-' || substr(hex(randomblob(3)), 1, 6) WHERE role = 'doctor' AND (license_number IS NULL OR license_number = '')")
 
     # OTP Verification Table
     cursor.execute("""
@@ -101,7 +113,7 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT NOT NULL,
         otp TEXT NOT NULL,
-        purpose TEXT NOT NULL,       -- 'signup' or 'signin'
+        purpose TEXT NOT NULL,
         expires_at REAL NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -137,12 +149,11 @@ def init_db():
     conn.commit()
     conn.close()
 
-    # Seed default doctor, patient, and verified sample report
     seed_default_data()
 
 
 def seed_default_data():
-    """Seed test accounts so doctors and patients can be immediately demonstrated."""
+    """Seed foundational doctor and patient records in SQLite."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -152,25 +163,41 @@ def seed_default_data():
     if not doctor:
         pwd_hash = hash_password("Password123!")
         cursor.execute("""
-        INSERT INTO users (name, email, password_hash, role, title, is_verified)
-        VALUES (?, ?, ?, 'doctor', 'Senior Electrophysiologist, Cardiology Dept.', 1)
+        INSERT INTO users (name, email, password_hash, role, title, license_number, is_verified)
+        VALUES (?, ?, ?, 'doctor', 'Senior Electrophysiologist, Cardiology Dept.', 'MD-CARDIO-882914', 1)
         """, ("Dr. Sarah Smith", "dr.smith@cardiovision.org", pwd_hash))
         doctor_id = cursor.lastrowid
     else:
         doctor_id = doctor["id"]
+        # Ensure license number is populated
+        cursor.execute("UPDATE users SET license_number = 'MD-CARDIO-882914' WHERE id = ? AND (license_number IS NULL OR license_number = '')", (doctor_id,))
 
-    # Seed Patient 1: John Doe
+    # Seed Doctor 2: Dr. Robert Vance
+    cursor.execute("SELECT id FROM users WHERE email = ?", ("dr.vance@cardiovision.org",))
+    doctor2 = cursor.fetchone()
+    if not doctor2:
+        pwd_hash = hash_password("Password123!")
+        cursor.execute("""
+        INSERT INTO users (name, email, password_hash, role, title, license_number, is_verified)
+        VALUES (?, ?, ?, 'doctor', 'Associate Professor of Cardiology', 'MD-CARDIO-551029', 1)
+        """, ("Dr. Robert Vance", "dr.vance@cardiovision.org", pwd_hash))
+        doctor2_id = cursor.lastrowid
+    else:
+        doctor2_id = doctor2["id"]
+
+    # Seed Patient 1: John Doe (Assigned to Dr. Sarah Smith)
     cursor.execute("SELECT id FROM users WHERE email = ?", ("john.doe@patient.org",))
     patient1 = cursor.fetchone()
     if not patient1:
         pwd_hash = hash_password("Password123!")
         cursor.execute("""
-        INSERT INTO users (name, email, password_hash, role, title, is_verified)
-        VALUES (?, ?, ?, 'patient', 'Age: 58 | ID: PT-9042', 1)
-        """, ("John Doe", "john.doe@patient.org", pwd_hash))
+        INSERT INTO users (name, email, password_hash, role, title, doctor_id, is_verified)
+        VALUES (?, ?, ?, 'patient', 'Age: 58 | Patient ID: PT-9042', ?, 1)
+        """, ("John Doe", "john.doe@patient.org", pwd_hash, doctor_id))
         patient1_id = cursor.lastrowid
     else:
         patient1_id = patient1["id"]
+        cursor.execute("UPDATE users SET doctor_id = ? WHERE id = ? AND doctor_id IS NULL", (doctor_id, patient1_id))
 
     # Seed Patient 2: Emily Rose
     cursor.execute("SELECT id FROM users WHERE email = ?", ("emily.rose@patient.org",))
@@ -178,14 +205,14 @@ def seed_default_data():
     if not patient2:
         pwd_hash = hash_password("Password123!")
         cursor.execute("""
-        INSERT INTO users (name, email, password_hash, role, title, is_verified)
-        VALUES (?, ?, ?, 'patient', 'Age: 42 | ID: PT-7183', 1)
-        """, ("Emily Rose", "emily.rose@patient.org", pwd_hash))
+        INSERT INTO users (name, email, password_hash, role, title, doctor_id, is_verified)
+        VALUES (?, ?, ?, 'patient', 'Age: 42 | Patient ID: PT-7183', ?, 1)
+        """, ("Emily Rose", "emily.rose@patient.org", pwd_hash, doctor_id))
         patient2_id = cursor.lastrowid
     else:
         patient2_id = patient2["id"]
 
-    # Seed Initial Verified Report for John Doe if none exists
+    # Seed Verified Sample Report for John Doe from Dr. Sarah Smith
     cursor.execute("SELECT id FROM reports WHERE patient_id = ?", (patient1_id,))
     if not cursor.fetchone():
         sample_telemetry = {
@@ -200,11 +227,11 @@ def seed_default_data():
             }
         }
         sample_preds = [
-            {"label": "AFIB", "title": "Atrial Fibrillation (AFib)", "score": 0.884, "percentage": 88.4, "urgency": "URGENT", "color": "#ff3366", "description": "Rapid, irregular atrial rhythm with absent P waves."},
-            {"label": "NORM", "title": "Normal Sinus Rhythm", "score": 0.062, "percentage": 6.2, "urgency": "Routine", "color": "#00e676", "description": "Regular physiological cardiac rhythm."},
-            {"label": "STTC", "title": "ST/T-Wave Changes", "score": 0.034, "percentage": 3.4, "urgency": "Moderate", "color": "#ffab00", "description": "Repolarization abnormalities."},
-            {"label": "CD", "title": "Conduction Disturbance", "score": 0.012, "percentage": 1.2, "urgency": "Moderate", "color": "#ff9100", "description": "Conduction system delay."},
-            {"label": "MI", "title": "Myocardial Infarction", "score": 0.008, "percentage": 0.8, "urgency": "URGENT", "color": "#ff1744", "description": "Ischemic myocardial injury."}
+            {"label": "AFIB", "title": "Atrial Fibrillation (AFib)", "score": 0.884, "percentage": 88.4, "urgency": "URGENT", "color": "#dc2626", "description": "Rapid, irregular atrial rhythm with absent P waves."},
+            {"label": "NORM", "title": "Normal Sinus Rhythm", "score": 0.062, "percentage": 6.2, "urgency": "Routine", "color": "#16a34a", "description": "Regular physiological cardiac rhythm."},
+            {"label": "STTC", "title": "ST/T-Wave Changes", "score": 0.034, "percentage": 3.4, "urgency": "Moderate", "color": "#d97706", "description": "Repolarization abnormalities."},
+            {"label": "CD", "title": "Conduction Disturbance", "score": 0.012, "percentage": 1.2, "urgency": "Moderate", "color": "#ea580c", "description": "Conduction system delay."},
+            {"label": "MI", "title": "Myocardial Infarction", "score": 0.008, "percentage": 0.8, "urgency": "URGENT", "color": "#b91c1c", "description": "Ischemic myocardial injury."}
         ]
         cursor.execute("""
         INSERT INTO reports (
@@ -228,8 +255,17 @@ def seed_default_data():
     conn.close()
 
 
-def create_user(name: str, email: str, password: str, role: str, title: str = "", is_verified: bool = False) -> Dict[str, Any]:
-    """Create a new user in the database."""
+def create_user(
+    name: str,
+    email: str,
+    password: str,
+    role: str,
+    title: str = "",
+    license_number: str = "",
+    doctor_id: Optional[int] = None,
+    is_verified: bool = False
+) -> Dict[str, Any]:
+    """Create a new user with medical license or chosen doctor assignment."""
     email_clean = email.strip().lower()
     role_clean = "doctor" if role.lower() == "doctor" else "patient"
     pwd_hash = hash_password(password)
@@ -238,9 +274,18 @@ def create_user(name: str, email: str, password: str, role: str, title: str = ""
     cursor = conn.cursor()
     try:
         cursor.execute("""
-        INSERT INTO users (name, email, password_hash, role, title, is_verified)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """, (name.strip(), email_clean, pwd_hash, role_clean, title.strip(), 1 if is_verified else 0))
+        INSERT INTO users (name, email, password_hash, role, title, license_number, doctor_id, is_verified)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            name.strip(),
+            email_clean,
+            pwd_hash,
+            role_clean,
+            title.strip(),
+            license_number.strip(),
+            doctor_id,
+            1 if is_verified else 0
+        ))
         user_id = cursor.lastrowid
         conn.commit()
         return {
@@ -249,6 +294,8 @@ def create_user(name: str, email: str, password: str, role: str, title: str = ""
             "email": email_clean,
             "role": role_clean,
             "title": title.strip(),
+            "license_number": license_number.strip(),
+            "doctor_id": doctor_id,
             "is_verified": bool(is_verified)
         }
     finally:
@@ -271,7 +318,10 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
     """Retrieve user dictionary by user id."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, email, role, title, is_verified, created_at FROM users WHERE id = ?", (user_id,))
+    cursor.execute("""
+    SELECT id, name, email, role, title, license_number, doctor_id, is_verified, created_at
+    FROM users WHERE id = ?
+    """, (user_id,))
     row = cursor.fetchone()
     conn.close()
     if row:
@@ -288,13 +338,24 @@ def set_user_verified(email: str):
     conn.close()
 
 
+def update_user_password(email: str, new_password: str) -> bool:
+    """Update password hash for a user during password reset."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    new_hash = hash_password(new_password)
+    cursor.execute("UPDATE users SET password_hash = ? WHERE email = ?", (new_hash, email.strip().lower()))
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
+
 def store_otp(email: str, otp: str, purpose: str = "signin", valid_seconds: int = 600):
     """Store verification OTP with expiry."""
     email_clean = email.strip().lower()
     expires_at = time.time() + valid_seconds
     conn = get_db_connection()
     cursor = conn.cursor()
-    # Delete old OTPs for this email and purpose
     cursor.execute("DELETE FROM email_otps WHERE email = ? AND purpose = ?", (email_clean, purpose))
     cursor.execute("""
     INSERT INTO email_otps (email, otp, purpose, expires_at)
@@ -317,7 +378,6 @@ def verify_otp(email: str, otp: str, purpose: str = "signin") -> bool:
     """, (email_clean, otp.strip(), purpose))
     row = cursor.fetchone()
     if row and row["expires_at"] >= now:
-        # OTP is valid, remove it
         cursor.execute("DELETE FROM email_otps WHERE id = ?", (row["id"],))
         conn.commit()
         conn.close()
@@ -326,12 +386,26 @@ def verify_otp(email: str, otp: str, purpose: str = "signin") -> bool:
     return False
 
 
+def get_all_doctors() -> List[Dict[str, Any]]:
+    """Retrieve list of all registered doctors with license numbers."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT id, name, email, title, license_number, created_at FROM users
+    WHERE role = 'doctor'
+    ORDER BY name ASC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def get_all_patients() -> List[Dict[str, Any]]:
     """Retrieve list of all registered patients."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-    SELECT id, name, email, title, created_at FROM users
+    SELECT id, name, email, title, doctor_id, created_at FROM users
     WHERE role = 'patient'
     ORDER BY name ASC
     """)
@@ -340,12 +414,27 @@ def get_all_patients() -> List[Dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
-def save_clinical_report(doctor_user: Dict[str, Any], patient_id: int, result_data: Dict[str, Any], notes: str, recommendation: str, image_url: str = "") -> Dict[str, Any]:
+def update_patient_doctor(patient_id: int, doctor_id: int):
+    """Update preferred/attending doctor for a patient."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET doctor_id = ? WHERE id = ?", (doctor_id, patient_id))
+    conn.commit()
+    conn.close()
+
+
+def save_clinical_report(
+    doctor_user: Dict[str, Any],
+    patient_id: int,
+    result_data: Dict[str, Any],
+    notes: str,
+    recommendation: str,
+    image_url: str = ""
+) -> Dict[str, Any]:
     """Save an official clinical report created by a doctor for a patient."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Get patient details
     cursor.execute("SELECT id, name, email FROM users WHERE id = ?", (patient_id,))
     patient = cursor.fetchone()
     if not patient:
@@ -361,6 +450,10 @@ def save_clinical_report(doctor_user: Dict[str, Any], patient_id: int, result_da
     confidence = float(result_data.get("confidence", 0.0))
     engine = result_data.get("engine", "CardioVision DeepNet ViT")
 
+    doc_display_title = doctor_user.get("title", "Attending Cardiologist")
+    if doctor_user.get("license_number"):
+        doc_display_title += f" (Lic: {doctor_user['license_number']})"
+
     cursor.execute("""
     INSERT INTO reports (
         patient_id, patient_name, patient_email,
@@ -370,7 +463,7 @@ def save_clinical_report(doctor_user: Dict[str, Any], patient_id: int, result_da
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         patient["id"], patient["name"], patient["email"],
-        doctor_user["id"], doctor_user["name"], doctor_user.get("title", "Cardiologist"),
+        doctor_user["id"], doctor_user["name"], doc_display_title,
         verdict, is_afib, afib_pct, top_cond, confidence, engine,
         notes.strip(), recommendation.strip(),
         json.dumps(telemetry), json.dumps(predictions), image_url
@@ -387,15 +480,24 @@ def save_clinical_report(doctor_user: Dict[str, Any], patient_id: int, result_da
     return new_report
 
 
-def get_patient_reports(patient_id: int) -> List[Dict[str, Any]]:
-    """Retrieve all reports issued for a specific patient, ordered by date desc."""
+def get_patient_reports(patient_id: int, doctor_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Retrieve reports issued for a patient, optionally filtered by a specific doctor."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-    SELECT * FROM reports
-    WHERE patient_id = ?
-    ORDER BY created_at DESC, id DESC
-    """, (patient_id,))
+
+    if doctor_id:
+        cursor.execute("""
+        SELECT * FROM reports
+        WHERE patient_id = ? AND doctor_id = ?
+        ORDER BY created_at DESC, id DESC
+        """, (patient_id, doctor_id))
+    else:
+        cursor.execute("""
+        SELECT * FROM reports
+        WHERE patient_id = ?
+        ORDER BY created_at DESC, id DESC
+        """, (patient_id,))
+
     rows = cursor.fetchall()
     conn.close()
 
@@ -412,6 +514,29 @@ def get_patient_reports(patient_id: int) -> List[Dict[str, Any]]:
             item["predictions"] = []
         results.append(item)
     return results
+
+
+def get_patient_doctors(patient_id: int) -> List[Dict[str, Any]]:
+    """Return list of distinct doctors who have either authored reports for this patient or are assigned."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    SELECT DISTINCT u.id, u.name, u.email, u.title, u.license_number
+    FROM users u
+    INNER JOIN reports r ON r.doctor_id = u.id
+    WHERE r.patient_id = ?
+    UNION
+    SELECT u.id, u.name, u.email, u.title, u.license_number
+    FROM users u
+    INNER JOIN users p ON p.doctor_id = u.id
+    WHERE p.id = ?
+    ORDER BY name ASC
+    """, (patient_id, patient_id))
+
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def get_doctor_reports(doctor_id: int) -> List[Dict[str, Any]]:

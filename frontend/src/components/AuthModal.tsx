@@ -22,8 +22,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
   // States
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
-
   if (!isOpen) return null;
 
   const handleRequestOtp = async (e: React.FormEvent) => {
@@ -47,7 +45,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to send verification code.');
 
-        if (data.dev_otp) setDevOtpHint(data.dev_otp);
         setStep('otp');
       } else {
         const res = await fetch('/api/auth/login-request', {
@@ -58,7 +55,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to authenticate credentials.');
 
-        if (data.dev_otp) setDevOtpHint(data.dev_otp);
         setStep('otp');
       }
     } catch (err: unknown) {
@@ -180,14 +176,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
           </div>
         )}
 
-        {devOtpHint && step === 'otp' && (
-          <div className="auth-dev-hint">
-            <span>✉️ Verification code sent to {email}!</span>
-            <span className="dev-code-chip">
-              Demo Code: <b>{devOtpHint}</b>
-            </span>
-          </div>
-        )}
 
         {step === 'input' ? (
           <form onSubmit={handleRequestOtp} className="auth-form">
@@ -304,7 +292,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
               className="auth-back-btn"
               onClick={() => {
                 setStep('input');
-                setDevOtpHint(null);
                 setOtp('');
               }}
             >
