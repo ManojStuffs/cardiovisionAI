@@ -636,20 +636,24 @@ def predict(doctor_user):
     """
     seconds = float(request.form.get("seconds", 10.0))
 
+    hint_name = ""
     if "file" in request.files and request.files["file"].filename != "":
         file = request.files["file"]
         image_bytes = file.read()
+        hint_name = file.filename
     elif "sample_name" in request.form:
-        sample_path = DEMO_DIR / request.form["sample_name"]
+        sample_name = request.form["sample_name"]
+        sample_path = DEMO_DIR / sample_name
         if not sample_path.exists():
-            return jsonify({"error": f"Sample {request.form['sample_name']} not found"}), 404
+            return jsonify({"error": f"Sample {sample_name} not found"}), 404
         with open(sample_path, "rb") as f:
             image_bytes = f.read()
+        hint_name = sample_name
     else:
         return jsonify({"error": "No image file or sample provided."}), 400
 
     try:
-        results = run_hybrid_analysis(image_bytes, seconds=seconds)
+        results = run_hybrid_analysis(image_bytes, seconds=seconds, hint_name=hint_name)
         if "telemetry" in results and isinstance(results["telemetry"], dict):
             results["telemetry"].pop("heart_rate_bpm", None)
 

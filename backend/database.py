@@ -227,11 +227,11 @@ def seed_default_data():
             }
         }
         sample_preds = [
-            {"label": "AFIB", "title": "Atrial Fibrillation (AFib)", "score": 0.884, "percentage": 88.4, "urgency": "URGENT", "color": "#dc2626", "description": "Rapid, irregular atrial rhythm with absent P waves."},
-            {"label": "NORM", "title": "Normal Sinus Rhythm", "score": 0.062, "percentage": 6.2, "urgency": "Routine", "color": "#16a34a", "description": "Regular physiological cardiac rhythm."},
-            {"label": "STTC", "title": "ST/T-Wave Changes", "score": 0.034, "percentage": 3.4, "urgency": "Moderate", "color": "#d97706", "description": "Repolarization abnormalities."},
-            {"label": "CD", "title": "Conduction Disturbance", "score": 0.012, "percentage": 1.2, "urgency": "Moderate", "color": "#ea580c", "description": "Conduction system delay."},
-            {"label": "MI", "title": "Myocardial Infarction", "score": 0.008, "percentage": 0.8, "urgency": "URGENT", "color": "#b91c1c", "description": "Ischemic myocardial injury."}
+            {"label": "AFIB", "title": "Atrial Fibrillation (AFib)", "score": 0.962, "percentage": 96.2, "urgency": "URGENT", "color": "#dc2626", "description": "Rapid, irregular atrial rhythm with absent P waves."},
+            {"label": "NORM", "title": "Normal Sinus Rhythm", "score": 0.019, "percentage": 1.9, "urgency": "Routine", "color": "#16a34a", "description": "Regular physiological cardiac rhythm."},
+            {"label": "STTC", "title": "ST/T-Wave Changes", "score": 0.010, "percentage": 1.0, "urgency": "Moderate", "color": "#d97706", "description": "Repolarization abnormalities."},
+            {"label": "CD", "title": "Conduction Disturbance", "score": 0.006, "percentage": 0.6, "urgency": "Moderate", "color": "#ea580c", "description": "Conduction system delay."},
+            {"label": "MI", "title": "Myocardial Infarction", "score": 0.003, "percentage": 0.3, "urgency": "URGENT", "color": "#b91c1c", "description": "Ischemic myocardial injury."}
         ]
         cursor.execute("""
         INSERT INTO reports (
@@ -243,7 +243,7 @@ def seed_default_data():
         """, (
             patient1_id, "John Doe", "john.doe@patient.org",
             doctor_id, "Dr. Sarah Smith", "Senior Electrophysiologist, Cardiology Dept.",
-            "ATRIAL FIBRILLATION DETECTED", 1, 88.4, "AFIB", 88.4, "CardioVision DeepNet ViT",
+            "ATRIAL FIBRILLATION DETECTED", 1, 96.2, "AFIB", 96.2, "Vision Transformer (ViT) & Arrhythmia Telemetry",
             "High RR variability (CV: 0.218) confirms irregularly irregular QRS timing with fibrillation waves.",
             "Initiate Apixaban 5mg BID for thromboembolism prophylaxis. Schedule outpatient 48h Holter monitoring and echocardiogram.",
             json.dumps(sample_telemetry),
